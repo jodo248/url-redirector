@@ -79,7 +79,7 @@ jobs:
             keytool -genkey -v \
               -keystore "$RUNNER_TEMP/ci.ks" \
               -alias igredirect \
-              -keyalg RSA -keysize 2048 -validity 10000 \
+              -keyalg RSA -keysize 2048 -validity 365250 \
               -dname "CN=IGRedirect CI, O=CI, C=US" \
               -storepass android123 -keypass android123 -noprompt
             echo "path=$RUNNER_TEMP/ci.ks"  >> $GITHUB_OUTPUT
@@ -110,7 +110,7 @@ jobs:
           TAG="${{ github.ref_name }}"
           VERSION="${TAG:-ci}"
           SRC=$(find app/build/outputs/apk -name "*.apk" | head -1)
-          DEST="IGRedirect-${VERSION}-${TYPE}.apk"
+          DEST="IGRedirect_${VERSION}_${TYPE}.apk"
           cp "$SRC" "$DEST"
           echo "file=$DEST" >> $GITHUB_OUTPUT
           echo "Built: $DEST"
@@ -121,7 +121,7 @@ jobs:
         with:
           name: ${{ steps.apk.outputs.file }}
           path: ${{ steps.apk.outputs.file }}
-          retention-days: 30
+          retention-days: 1
 
       # 11. Create a GitHub Release (only when triggered by a tag push)
       - name: Create GitHub Release
