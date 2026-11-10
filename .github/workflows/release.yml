@@ -114,7 +114,7 @@ jobs:
         with:
           name: ${{ steps.apk.outputs.file }}
           path: ${{ steps.apk.outputs.file }}
-          retention-days: 30
+          retention-days: 1
 
       # 9. Create a GitHub Release (only when triggered by a tag push)
       - name: Create GitHub Release
