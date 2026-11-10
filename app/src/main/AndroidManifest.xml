@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.IGRedirect">
+
+        <!-- Settings screen - launched from app icon -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            Redirect handler - transparent, intercepts Instagram URLs.
+            NOTE: On Android 12+ the official Instagram app (if installed) may
+            be preferred via App Links verification. Users can still pick this
+            app from the disambiguation chooser and optionally set it as default.
+            On Android 9-11 (or without Instagram installed) it works seamlessly.
+        -->
+        <activity
+            android:name=".RedirectActivity"
+            android:exported="true"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.IGRedirect.Transparent">
+
+            <!-- instagram.com -->
+            <intent-filter android:label="@string/app_name">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="instagram.com" />
+                <data android:scheme="https" android:host="www.instagram.com" />
+                <data android:scheme="http"  android:host="instagram.com" />
+                <data android:scheme="http"  android:host="www.instagram.com" />
+            </intent-filter>
+
+        </activity>
+
+    </application>
+
+</manifest>

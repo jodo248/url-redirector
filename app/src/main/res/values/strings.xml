@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">IGRedirect</string>
+
+    <!-- Sections -->
+    <string name="active_frontend">Active Frontend</string>
+    <string name="frontends">Frontends</string>
+    <string name="redirect_rules">Redirect Rules</string>
+    <string name="preferred_browser">Preferred Browser</string>
+    <string name="options">Options</string>
+    <string name="backup">Backup / Restore</string>
+    <string name="how_to_use">How to Use</string>
+
+    <!-- Spinner entries -->
+    <string name="auto_select">Auto (first enabled)</string>
+    <string name="system_default">System default</string>
+
+    <!-- Switches -->
+    <string name="strip_tracking_params">Strip tracking parameters from URLs</string>
+
+    <!-- Buttons -->
+    <string name="add">Add</string>
+    <string name="delete">Delete</string>
+    <string name="export_settings">Export</string>
+    <string name="import_settings">Import</string>
+
+    <!-- Dialogs -->
+    <string name="add_frontend">Add Frontend</string>
+    <string name="frontend_name">Display name</string>
+    <string name="frontend_url">Base URL</string>
+    <string name="frontend_url_hint">e.g. https://kg.meowing.de</string>
+
+    <string name="add_rule">Add Redirect Rule</string>
+    <string name="rule_name">Rule name</string>
+    <string name="rule_pattern">URL regex pattern</string>
+    <string name="rule_pattern_hint">e.g. ^https?://(www\\.)?instagram\\.com(/.*)?$</string>
+
+    <string name="import_confirm_message">This will replace all current settings. Continue?</string>
+    <string name="import_replace">Replace</string>
+
+    <string name="confirm_delete_frontend">Delete frontend \"%s\"?</string>
+    <string name="confirm_delete_rule">Delete rule \"%s\"?</string>
+
+    <!-- Toasts / errors -->
+    <string name="cannot_delete_builtin">Built-in items cannot be deleted (disable them instead)</string>
+    <string name="no_frontend_configured">No frontend configured — open IGRedirect settings to pick one</string>
+    <string name="no_browser_found">No browser found to open the URL</string>
+    <string name="export_success">Settings exported</string>
+    <string name="export_failed">Export failed</string>
+    <string name="import_success">Settings imported</string>
+    <string name="import_failed">Import failed — invalid file?</string>
+    <string name="error_name_empty">Name cannot be empty</string>
+    <string name="error_url_empty">URL cannot be empty</string>
+    <string name="error_url_invalid">URL must start with http:// or https://</string>
+    <string name="error_pattern_empty">Pattern cannot be empty</string>
+    <string name="error_invalid_regex">Invalid regex pattern</string>
+
+    <!-- Setup banner -->
+    <string name="setup_banner_desc">No active frontend selected. Enable at least one frontend above and select it as active.</string>
+
+    <!-- How to use -->
+    <string name="how_to_use_desc">1. Click any Instagram link in any app.\n2. Android shows a chooser — tap IGRedirect.\n3. Optionally tap \"Always\" to make it the default.\n\nNote: On Android 12+ with the official Instagram app installed, you may need to uninstall it or long-press the link and select \"Open with…\" to reach the chooser.</string>
+</resources>
