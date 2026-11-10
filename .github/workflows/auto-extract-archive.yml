@@ -1,0 +1,264 @@
+# .github/workflows/extract-archive.yml
+#
+# PURPOSE
+# -------
+# Two ways to update the master branch by uploading an archive:
+#
+#   1. PUSH TRIGGER — commit any .tar.gz / .tgz / .tar / .zip file into the
+#      `uploads/` folder of the repo. This workflow fires automatically,
+#      extracts the archive into the repo root (stripping a single wrapper
+#      directory if present, e.g. "twitch_1.2.0-main/"), deletes the archive
+#      file from uploads/, then commits everything back to master.
+#
+#   2. MANUAL TRIGGER — go to Actions → "Extract archive into master" →
+#      "Run workflow". Supply a public download URL for the archive, and
+#      optionally a subdirectory target and strip-root setting.
+#
+# TYPICAL USE
+# -----------
+#   git checkout master
+#   mkdir -p uploads
+#   cp ~/my-fix.tar.gz uploads/
+#   git add uploads/my-fix.tar.gz
+#   git commit -m "upload fix"
+#   git push
+#   # → workflow fires, extracts, commits, done.
+
+name: Extract archive into master
+
+on:
+  # ── Auto: any archive committed into uploads/ ──────────────────────────
+  push:
+    branches: [master, main]
+    paths:
+      - 'uploads/*.tar.gz'
+      - 'uploads/*.tgz'
+      - 'uploads/*.tar'
+      - 'uploads/*.zip'
+
+  # ── Manual: provide a URL or run against a file already in uploads/ ────
+  workflow_dispatch:
+    inputs:
+      archive_url:
+        description: >
+          Public URL of the archive to download and extract.
+          Leave blank to use the newest file in uploads/ instead.
+        required: false
+        type: string
+        default: ''
+      target_subdir:
+        description: >
+          Repo subdirectory to extract into (e.g. "src/plugin").
+          Leave blank to extract into the repository root.
+        required: false
+        type: string
+        default: ''
+      strip_root_dir:
+        description: >
+          Strip a single top-level wrapper directory from the archive?
+          (e.g. removes "twitch_1.2.0-main/" so files land at the right depth)
+        required: false
+        type: choice
+        default: 'auto'
+        options:
+          - 'auto'   # strip only when there is exactly one top-level dir
+          - 'yes'    # always strip the first path component
+          - 'no'     # never strip; extract exactly as packed
+
+jobs:
+  extract-and-apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to push the commit bac
+      
+
+    steps:
+      # ── 1. Check out master ────────────────────────────────────────────
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MY_PAT }}
+         # ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          # Use the default GITHUB_TOKEN — enough for non-protected branches.
+          # If master is protected, replace with a PAT stored as a secret:
+          #   token: ${{ secrets.MY_PAT }}
+
+      # ── 2. Resolve the archive (URL download OR newest file in uploads/) ─
+      - name: Locate archive
+        id: locate
+        run: |
+          set -euo pipefail
+
+          ARCHIVE_URL="${{ inputs.archive_url }}"
+
+          if [[ -n "$ARCHIVE_URL" ]]; then
+            echo "mode=url" >> "$GITHUB_OUTPUT"
+            # Strip any query-string from the filename
+            FILENAME=$(basename "$ARCHIVE_URL" | sed 's/[?#].*//')
+            DEST="/tmp/${FILENAME}"
+            echo "Downloading: $ARCHIVE_URL"
+            curl -fsSL "$ARCHIVE_URL" -o "$DEST"
+            echo "archive=$DEST"         >> "$GITHUB_OUTPUT"
+            echo "cleanup_path="         >> "$GITHUB_OUTPUT"   # nothing to git-rm
+          else
+            echo "mode=uploads" >> "$GITHUB_OUTPUT"
+            # Pick the most recently modified archive in uploads/
+            FOUND=$(find uploads/ -maxdepth 1 \
+                      \( -name '*.tar.gz' -o -name '*.tgz' \
+                         -o -name '*.tar'  -o -name '*.zip' \) \
+                      -printf '%T@ %p\n' 2>/dev/null \
+                    | sort -rn | head -1 | cut -d' ' -f2-)
+            if [[ -z "$FOUND" ]]; then
+              echo "::error::No archive found in uploads/ — nothing to extract."
+              exit 1
+            fi
+            echo "Found in uploads/: $FOUND"
+            echo "archive=$FOUND"        >> "$GITHUB_OUTPUT"
+            echo "cleanup_path=$FOUND"   >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── 3. Extract into /tmp/extracted/ ───────────────────────────────
+      - name: Extract archive
+        id: extract
+        run: |
+          set -euo pipefail
+
+          ARCHIVE="${{ steps.locate.outputs.archive }}"
+          EXTRACT_ROOT="/tmp/extracted"
+          rm -rf "$EXTRACT_ROOT"
+          mkdir -p "$EXTRACT_ROOT"
+
+          # Detect format by extension first, fall back to `file` magic bytes
+          detect_and_extract() {
+            local src="$1" dst="$2"
+            case "$src" in
+              *.tar.gz|*.tgz)
+                echo "Format: tar.gz"
+                tar -xzf "$src" -C "$dst"
+                ;;
+              *.tar)
+                echo "Format: tar"
+                tar -xf  "$src" -C "$dst"
+                ;;
+              *.zip)
+                echo "Format: zip"
+                unzip -q "$src" -d "$dst"
+                ;;
+              *)
+                local mime
+                mime=$(file --mime-type -b "$src")
+                echo "Unknown extension — detected MIME: $mime"
+                case "$mime" in
+                  application/gzip|application/x-gzip)
+                    tar -xzf "$src" -C "$dst" ;;
+                  application/x-tar|application/x-ustar)
+                    tar -xf  "$src" -C "$dst" ;;
+                  application/zip)
+                    unzip -q "$src" -d "$dst" ;;
+                  application/x-bzip2)
+                    tar -xjf "$src" -C "$dst" ;;
+                  application/x-xz)
+                    tar -xJf "$src" -C "$dst" ;;
+                  application/zstd|application/x-zstd)
+                    tar --use-compress-program=zstd -xf "$src" -C "$dst" ;;
+                  *)
+                    echo "::error::Unrecognized archive format (MIME: $mime)"
+                    exit 1
+                    ;;
+                esac
+                ;;
+            esac
+          }
+
+          detect_and_extract "$ARCHIVE" "$EXTRACT_ROOT"
+
+          echo ""
+          echo "── Top-level entries after extraction ──────────────────────"
+          ls -la "$EXTRACT_ROOT"
+
+          # ── Decide whether to strip the wrapper directory ────────────────
+          STRIP_OPT="${{ inputs.strip_root_dir }}"
+          STRIP_OPT="${STRIP_OPT:-auto}"   # default when triggered by push
+
+          TOP_COUNT=$(ls "$EXTRACT_ROOT" | wc -l)
+          TOP_FIRST=$(ls "$EXTRACT_ROOT" | head -1)
+
+          SOURCE_DIR="$EXTRACT_ROOT"
+
+          if [[ "$STRIP_OPT" == "yes" ]]; then
+            # Force-strip first component (must exist and be a directory)
+            FIRST="$EXTRACT_ROOT/$(ls "$EXTRACT_ROOT" | head -1)"
+            if [[ -d "$FIRST" ]]; then
+              echo "strip_root_dir=yes — stripping: $(ls "$EXTRACT_ROOT" | head -1)"
+              SOURCE_DIR="$FIRST"
+            else
+              echo "::warning::strip_root_dir=yes but top entry is not a directory; skipping strip."
+            fi
+          elif [[ "$STRIP_OPT" == "auto" && "$TOP_COUNT" -eq 1 && -d "$EXTRACT_ROOT/$TOP_FIRST" ]]; then
+            echo "auto-strip: single root directory detected — stripping: $TOP_FIRST"
+            SOURCE_DIR="$EXTRACT_ROOT/$TOP_FIRST"
+          else
+            echo "No directory strip applied (mode=$STRIP_OPT, top-level entries=$TOP_COUNT)."
+          fi
+
+          echo ""
+          echo "── Files to be applied ─────────────────────────────────────"
+          ls -la "$SOURCE_DIR"
+
+          echo "source_dir=$SOURCE_DIR" >> "$GITHUB_OUTPUT"
+
+      # ── 4. Rsync extracted files over the repo ────────────────────────
+      - name: Apply files to repo
+        run: |
+          set -euo pipefail
+
+          SOURCE="${{ steps.extract.outputs.source_dir }}"
+          TARGET="${{ inputs.target_subdir }}"
+          TARGET="${TARGET:-.}"
+
+          # Normalise — remove trailing slash, ensure dir exists
+          TARGET="${TARGET%/}"
+          if [[ "$TARGET" != "." ]]; then
+            mkdir -p "$TARGET"
+          fi
+
+          echo "rsync: $SOURCE/ → $TARGET/"
+          rsync -av --exclude='.git' "$SOURCE/" "$TARGET/"
+
+          echo ""
+          echo "── Git status after apply ───────────────────────────────────"
+          git status --short
+
+      # ── 5. Remove the archive from uploads/ (push-trigger path only) ──
+      - name: Remove processed archive from uploads/
+        if: steps.locate.outputs.cleanup_path != ''
+        run: |
+          CLEANUP="${{ steps.locate.outputs.cleanup_path }}"
+          echo "Removing: $CLEANUP"
+          git rm --cached "$CLEANUP" 2>/dev/null || true
+          rm -f "$CLEANUP"
+
+      # ── 6. Commit and push ────────────────────────────────────────────
+      - name: Commit and push changes
+        run: |
+          set -euo pipefail
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit — archive contents matched existing files exactly."
+            exit 0
+          fi
+
+          ARCHIVE_NAME=$(basename "${{ steps.locate.outputs.archive }}")
+          URL_OR_PATH="${{ inputs.archive_url || steps.locate.outputs.cleanup_path }}"
+          URL_OR_PATH="${URL_OR_PATH:-$ARCHIVE_NAME}"
+
+          git commit -m $'chore: apply '"${ARCHIVE_NAME}"$'\n\nAuto-extracted by the Extract archive into master workflow.\nTriggered by: ${{ github.actor }} via ${{ github.event_name }}\nSource: '"${URL_OR_PATH}"
+
+          git push origin ${{ github.ref_name }}
+          echo "Done — changes pushed to ${{ github.ref_name }}."
